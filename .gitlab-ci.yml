@@ -1,0 +1,64 @@
+stages:
+  - test
+  - build
+  - info
+
+variables:
+  APP_DIR: "simple_python_app"
+  DOCKER_IMAGE: "$DOCKER_USERNAME/simple-python-app"
+  DOCKER_DRIVER: overlay2
+
+test_app:
+  stage: test
+  image: python:3.10
+  before_script:
+    - pip install --upgrade pip
+    - pip install -r requirements.txt
+  script:
+    - python -m unittest discover "$APP_DIR/tests"
+  only:
+    - main
+
+build_latest:
+  stage: build
+  image: docker:latest
+  services:
+    - docker:dind
+  before_script:
+    - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
+  script:
+    - docker build -t "$DOCKER_IMAGE:latest" .
+    - docker push "$DOCKER_IMAGE:latest"
+  needs:
+    - test_app
+  only:
+    - main
+
+build_commit:
+  stage: build
+  image: docker:latest
+  services:
+    - docker:dind
+  before_script:
+    - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
+  script:
+    - docker build -t "$DOCKER_IMAGE:$CI_COMMIT_SHORT_SHA" .
+    - docker push "$DOCKER_IMAGE:$CI_COMMIT_SHORT_SHA"
+  needs:
+    - test_app
+  only:
+    - main
+
+display_info:
+  stage: info
+  image: alpine:latest
+  script:
+    - echo "Denys Letvynko"
+    - echo "Pipeline finished successfully"
+    - echo "Docker image latest: $DOCKER_IMAGE:latest"
+    - echo "Docker image commit: $DOCKER_IMAGE:$CI_COMMIT_SHORT_SHA"
+  needs:
+    - build_latest
+    - build_commit
+  only:
+    - main
